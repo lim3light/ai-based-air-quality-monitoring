@@ -1,0 +1,308 @@
+# AirQual - AI-Based Air Quality Monitoring System
+# Technical Documentation & Architecture Overview
+
+## 1. SYSTEM ARCHITECTURE
+
+### 1.1 Overview
+AirQual is built on a hybrid architecture that combines front-end and back-end components within a Streamlit framework. The system employs a three-tier architecture:
+1. Presentation Layer (UI/Front-end)
+2. Application Layer (Business Logic)
+3. Data Layer (Database & External APIs)
+
+### 1.2 Component Interaction Diagram
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Presentation   │     │   Application    │     │     Data        │
+│     Layer       │◄───►│      Layer       │◄───►│     Layer       │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                        │                       │
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Streamlit     │     │  Data Processing│     │  PostgreSQL DB  │
+│     UI          │     │  Business Logic │     │  WAQI API       │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+## 2. FRONT-END ARCHITECTURE
+
+### 2.1 UI Framework
+Streamlit serves as both the front-end and application server, handling:
+- Page rendering and navigation
+- User input collection
+- Data visualization
+- Session state management
+
+### 2.2 Key UI Components
+1. **Main App (app.py)**
+   - Entry point of the application
+   - Authentication interface (login/registration)
+   - Session management
+
+2. **Dashboard (pages/dashboard.py)**
+   - Real-time AQI display with color-coded indicators
+   - City search functionality with suggestion mechanism
+   - Pollutant breakdown visualization
+   - Location saving options
+
+3. **Historical Data (pages/history.py)**
+   - Time-series visualization of historical AQI
+   - Date range selector
+   - Statistical analysis of historical data
+
+4. **Profile Management (pages/profile.py)**
+   - User preference management
+   - Saved locations management
+   - Health condition input for personalized recommendations
+
+5. **Recommendations (pages/recommendations.py)**
+   - Health advice based on current AQI levels
+   - Personalized recommendations considering health conditions
+   - Protective measures for poor air quality situations
+
+### 2.3 Data Visualization Techniques
+- **Real-time AQI Display**: Gauge charts with color-coding based on AQI levels
+- **Pollutant Breakdown**: Bar charts showing individual pollutant contributions
+- **Historical Trends**: Line charts with interactive date selection
+- **Forecast Visualization**: Line charts with confidence intervals for predictions
+
+## 3. BACK-END ARCHITECTURE
+
+### 3.1 Data Processing Pipeline
+1. **User Input Processing**
+   - City name validation and cleaning
+   - Query parameter preparation
+   - Error handling for invalid inputs
+
+2. **API Integration Layer**
+   - External WAQI API communication module
+   - Request formation and transmission
+   - Response parsing and normalization
+
+3. **Data Storage Logic**
+   - Database schema management
+   - Query construction
+   - Transaction handling
+
+### 3.2 Key Back-End Components
+1. **Authentication System (auth.py)**
+   - User registration with password hashing
+   - Login validation
+   - Session management
+   - Password reset functionality
+
+2. **Data Retrieval Module (data.py)**
+   - WAQI API integration
+   - City name cleaning and validation
+   - Data transformation and normalization
+   - Error handling and retry mechanisms
+
+3. **Database Interface (database.py)**
+   - Connection pool management
+   - Schema initialization
+   - CRUD operations for user data
+   - Historical data storage and retrieval
+
+4. **ML Model Framework (models.py)**
+   - Data preprocessing for training
+   - Model training pipeline
+   - Prediction generation
+   - Model persistence
+
+5. **Recommendation Engine (recommendations.py)**
+   - Rule-based health recommendation generation
+   - Personalization based on user health profiles
+   - Activity modification suggestions
+   - Protective measures recommendations
+
+### 3.3 Database Schema
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Users       │     │   UserPrefs     │     │  AQIReadings    │
+├─────────────────┤     ├─────────────────┤     ├─────────────────┤
+│ username (PK)   │─┐   │ username (FK)   │     │ id (PK)         │
+│ password_hash   │ └──►│ preference      │     │ username (FK)   │
+│ email           │     │ value           │     │ location        │
+│ join_date       │     └─────────────────┘     │ aqi_value       │
+│ last_login      │                             │ timestamp       │
+└─────────────────┘                             │ data (JSON)     │
+        │                                       └─────────────────┘
+        │                                               ▲
+        │          ┌─────────────────┐                  │
+        │          │ SavedLocations  │                  │
+        └─────────►├─────────────────┤                  │
+                   │ username (FK)   │                  │
+                   │ location        │──────────────────┘
+                   └─────────────────┘
+```
+
+## 4. KEY TECHNICAL PROCESSES
+
+### 4.1 User Authentication Flow
+1. User enters credentials on login page
+2. System hashes provided password and compares with stored hash
+3. Upon successful verification, user session is created
+4. Session information is stored in Streamlit's session state
+5. Authentication state persists until logout or session timeout
+
+### 4.2 AQI Data Fetching Process
+1. User inputs location name in search field
+2. System sanitizes and validates the input (removing special characters)
+3. Request is sent to WAQI API with the sanitized location name
+4. API response is parsed and validated
+5. If location is valid, AQI data is processed and displayed
+6. If location is invalid, system queries for similar locations
+7. Similar location suggestions are presented to the user
+8. Current AQI data is cached briefly to reduce API calls
+9. Results are stored in PostgreSQL for historical tracking
+
+### 4.3 AI-Based Recommendation Generation
+1. System retrieves current AQI value for user's location
+2. AQI value is categorized into severity levels:
+   - Good (0-50)
+   - Moderate (51-100)
+   - Unhealthy for Sensitive Groups (101-150)
+   - Unhealthy (151-200)
+   - Very Unhealthy (201-300)
+   - Hazardous (301+)
+3. Base recommendations are selected from a rule-based system
+4. If user has provided health conditions, the system evaluates:
+   - Respiratory conditions (asthma, COPD)
+   - Cardiovascular conditions
+   - Age factors (children, elderly)
+   - Activity levels
+5. Personalized recommendations are generated by augmenting base recommendations
+6. Special protective measures are added for high-risk groups
+7. Recommendations are presented with severity-appropriate visual indicators
+
+### 4.4 AQI Prediction Process
+1. Historical AQI data is retrieved for the specified location
+2. Data is preprocessed:
+   - Missing values are imputed
+   - Features are normalized
+   - Time-based features are extracted (day of week, month, etc.)
+3. Trained model (Random Forest or similar) makes predictions
+4. Confidence intervals are calculated for predictions
+5. Predicted values are visualized alongside historical data
+6. Predictions are updated daily based on new data
+
+## 5. DATA FLOW BETWEEN COMPONENTS
+
+### 5.1 User Data Flow
+```
+User Registration → auth.py → database.py → PostgreSQL
+                     │
+                     v
+User Login ────────► Session State → app.py → Streamlit UI
+                                     │
+                                     v
+User Preferences ───► database.py → PostgreSQL
+```
+
+### 5.2 AQI Data Flow
+```
+User Location Query → data.py → WAQI API → Response
+                       │           │
+                       v           v
+               Data Processing ← Raw Data
+                       │
+                       v
+               dashboard.py → Visualization → User Interface
+                       │
+                       v
+               database.py → PostgreSQL (Historical Storage)
+```
+
+### 5.3 Recommendation Data Flow
+```
+AQI Data → utils.py → AQI Category
+             │
+             v
+User Health Data → recommendations.py → Personalized Advice
+                                           │
+                                           v
+                                     User Interface
+```
+
+## 6. SECURITY MEASURES
+
+### 6.1 Authentication Security
+- Passwords are never stored in plain text
+- Industry-standard hashing algorithms with salting are used
+- Session timeouts are implemented
+- Failed login attempt limiting
+
+### 6.2 Data Protection
+- API keys are stored in environment variables, never in code
+- Database connection strings are secured
+- User health data is protected with access controls
+- Data validation prevents SQL injection
+
+### 6.3 API Security
+- Rate limiting for API requests
+- Error handling prevents exposure of sensitive information
+- API keys are rotated periodically
+
+## 7. SCALABILITY CONSIDERATIONS
+
+### 7.1 Current Limitations
+- Single-threaded Streamlit application
+- Limited concurrent user capacity
+- API rate limits from WAQI
+
+### 7.2 Potential Scaling Solutions
+- Database connection pooling
+- Caching layer for frequent API calls
+- Background processing for computationally intensive tasks
+- Horizontal scaling for database operations
+
+## 8. FUTURE TECHNICAL ENHANCEMENTS
+
+### 8.1 Planned Technical Improvements
+- Improved ML model for more accurate predictions
+- Integration with additional data sources
+- Mobile-optimized interface
+- Push notifications for AQI alerts
+- Geolocation-based automatic location detection
+- Advanced data visualization options
+- Enhanced health recommendation algorithms
+
+### 8.2 Technical Debt & Refactoring Needs
+- Modularization of the codebase
+- Comprehensive test suite implementation
+- API version management
+- Performance optimization for data processing
+- Enhanced error handling and logging
+- Background task queue for asynchronous operations
+
+## 9. DEPLOYMENT ARCHITECTURE
+
+### 9.1 Current Deployment
+- Replit environment
+- Single-instance deployment
+- PostgreSQL database
+- Environment variables for configuration
+
+### 9.2 Production Deployment Options
+- Containerization with Docker
+- Cloud platform deployment (AWS, GCP, Azure)
+- Database scaling with managed PostgreSQL
+- Load balancing for multiple instances
+- Content delivery network for static assets
+
+## 10. DEVELOPMENT WORKFLOW
+
+### 10.1 Version Control
+- Git-based source code management
+- Feature branch workflow
+- Pull request review process
+
+### 10.2 Testing Strategy
+- Unit tests for core functions
+- Integration tests for API interactions
+- UI tests for frontend functionality
+- Performance benchmarking
+
+### 10.3 Documentation Standards
+- Inline code documentation
+- Function and class docstrings
+- README updates for major changes
+- Architecture documentation maintenance
