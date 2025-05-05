@@ -182,7 +182,7 @@ def get_historical_aqi(location, days=7):
         location = clean_location_name(location)
         
         # Get current AQI first to check if the location exists
-        api_url = f"{WAQI_BASE_URL}/feed/{location}/?token={WAQI_DEMO_TOKEN}"
+        api_url = f"{WAQI_BASE_URL}/feed/{location}/?token={WAQI_API_KEY}"
         response = requests.get(api_url)
         data = response.json()
         
