@@ -6,7 +6,9 @@ import re
 
 # API URLs
 WAQI_BASE_URL = "https://api.waqi.info"
-WAQI_DEMO_TOKEN = "demo"  # Using demo token, in production use a proper API key
+import os
+# Get API key from environment variables
+WAQI_API_KEY = os.environ.get("WAQI_API_KEY", "demo")
 
 def get_current_aqi(location):
     """
@@ -23,7 +25,7 @@ def get_current_aqi(location):
         location = clean_location_name(location)
         
         # Fetch data directly from WAQI API
-        api_url = f"{WAQI_BASE_URL}/feed/{location}/?token={WAQI_DEMO_TOKEN}"
+        api_url = f"{WAQI_BASE_URL}/feed/{location}/?token={WAQI_API_KEY}"
         response = requests.get(api_url)
         data = response.json()
         
@@ -101,7 +103,7 @@ def search_city(keyword):
         list: List of matching city names
     """
     try:
-        search_url = f"{WAQI_BASE_URL}/search/?token={WAQI_DEMO_TOKEN}&keyword={keyword}"
+        search_url = f"{WAQI_BASE_URL}/search/?token={WAQI_API_KEY}&keyword={keyword}"
         response = requests.get(search_url)
         data = response.json()
         
