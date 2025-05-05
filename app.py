@@ -143,7 +143,7 @@ else:
         with st.spinner("Fetching air quality data..."):
             aqi_data = data.get_current_aqi(st.session_state.location)
             
-        if aqi_data:
+        if aqi_data and 'error' not in aqi_data:
             st.session_state.current_aqi = aqi_data
             
             # Display AQI with color indicator
@@ -177,7 +177,37 @@ else:
                         database.update_user_locations(conn, st.session_state.username, st.session_state.locations)
                         st.success(f"{st.session_state.location} removed from your locations")
                         st.rerun()
+        elif aqi_data and 'error' in aqi_data and 'suggestions' in aqi_data:
+            # Display city suggestions
+            st.error(f"Location '{st.session_state.location}' not found. Did you mean one of these?")
             
+            # Display city suggestions as buttons
+            suggestions = aqi_data.get('suggestions', [])
+            if suggestions:
+                cols = st.columns(min(3, len(suggestions)))
+                for i, suggestion in enumerate(suggestions[:6]):  # Show up to 6 suggestions
+                    col_idx = i % len(cols)
+                    with cols[col_idx]:
+                        if st.button(f"📍 {suggestion}", key=f"suggestion_{i}"):
+                            st.session_state.location = suggestion
+                            st.rerun()
+            
+            st.info("Please select a location from the suggestions or try a different search term.")
+            
+            # Display a list of popular cities to try
+            st.subheader("Popular Cities")
+            popular_cities = ["Shanghai", "Delhi", "Paris", "Berlin", "New York", "Los Angeles", 
+                             "Tokyo", "Seoul", "Beijing", "Mumbai", "London", "Bangkok"]
+            
+            # Create a grid of buttons for popular cities
+            cols = st.columns(3)
+            for i, city in enumerate(popular_cities):
+                col_idx = i % 3
+                with cols[col_idx]:
+                    if st.button(f"🌆 {city}", key=f"popular_{i}"):
+                        st.session_state.location = city
+                        st.rerun()
+        elif aqi_data and 'aqi' in aqi_data:
             # Display pollutants data
             st.subheader("Pollutant Levels")
             
@@ -210,6 +240,7 @@ else:
                 st.info("Detailed pollutant data not available for this location")
             
             # Quick health recommendations based on AQI
+            aqi_value = aqi_data.get('aqi', 0)
             st.subheader("Quick Health Tips")
             recommendations = get_recommendations(aqi_value)
             

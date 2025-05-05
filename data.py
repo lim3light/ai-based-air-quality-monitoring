@@ -2,9 +2,11 @@ import requests
 import pandas as pd
 import time
 from datetime import datetime, timedelta
+import re
 
-# OpenAQ API base URL
-OPENAQ_BASE_URL = "https://api.openaq.org/v2"
+# API URLs
+WAQI_BASE_URL = "https://api.waqi.info"
+WAQI_DEMO_TOKEN = "demo"  # Using demo token, in production use a proper API key
 
 def get_current_aqi(location):
     """
@@ -17,67 +19,11 @@ def get_current_aqi(location):
         dict: Dictionary containing AQI and pollutant data
     """
     try:
-        # First, get the location coordinates
-        location_url = f"{OPENAQ_BASE_URL}/locations"
-        location_params = {
-            "limit": 1,
-            "page": 1,
-            "offset": 0,
-            "sort": "desc",
-            "radius": 1000,
-            "name": location,
-            "order_by": "lastUpdated"
-        }
+        # Clean the location name - remove special characters and ensure it's properly formatted
+        location = clean_location_name(location)
         
-        location_response = requests.get(location_url, params=location_params)
-        location_data = location_response.json()
-        
-        if not location_data or 'results' not in location_data or not location_data['results']:
-            return None
-        
-        location_id = location_data['results'][0]['id']
-        
-        # Now get the latest measurements for this location
-        measurements_url = f"{OPENAQ_BASE_URL}/latest/{location_id}"
-        measurements_response = requests.get(measurements_url)
-        measurements_data = measurements_response.json()
-        
-        if not measurements_data or 'results' not in measurements_data or not measurements_data['results']:
-            return None
-        
-        pollutants = {}
-        for measurement in measurements_data['results']:
-            parameter = measurement['parameter']
-            value = measurement['value']
-            pollutants[parameter] = value
-        
-        # Calculate AQI based on pollutants
-        # Note: This is a simplified calculation, a real-world system would use more complex AQI formulas
-        aqi = calculate_aqi(pollutants)
-        
-        return {
-            'aqi': aqi,
-            'pollutants': pollutants,
-            'location': location,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        print(f"Error fetching AQI data: {e}")
-        # Fallback to alternative API or mock data for testing
-        try:
-            # Try alternative API (WAQI/AirVisual)
-            return get_aqi_from_alternative_source(location)
-        except:
-            return None
-
-def get_aqi_from_alternative_source(location):
-    """
-    Fallback to an alternative API for AQI data
-    """
-    try:
-        # Example using World Air Quality Index API (requires API key in production)
-        api_url = f"https://api.waqi.info/feed/{location}/?token=demo"
+        # Fetch data directly from WAQI API
+        api_url = f"{WAQI_BASE_URL}/feed/{location}/?token={WAQI_DEMO_TOKEN}"
         response = requests.get(api_url)
         data = response.json()
         
@@ -102,18 +48,74 @@ def get_aqi_from_alternative_source(location):
                 if key in iaqi:
                     pollutants[display_name] = iaqi[key]['v']
             
+            # Get location name from the API response
+            display_location = data['data']['city'].get('name', location)
+            
             return {
                 'aqi': aqi,
                 'pollutants': pollutants,
-                'location': location,
-                'timestamp': datetime.now().isoformat()
+                'location': display_location,
+                'timestamp': datetime.now().isoformat(),
+                'dominentpol': data['data'].get('dominentpol', 'unknown')
             }
-        
-        return None
-        
+        else:
+            # If this specific city name didn't work, try to find similar cities
+            similar_cities = search_city(location)
+            if similar_cities:
+                # We don't want to automatically choose a city - we'll provide suggestions
+                # Return None with suggestions
+                return {
+                    'error': 'City not found',
+                    'suggestions': similar_cities[:5]  # Return top 5 suggestions
+                }
+            return None
+            
     except Exception as e:
-        print(f"Error with alternative AQI source: {e}")
+        print(f"Error fetching AQI data: {e}")
         return None
+
+def clean_location_name(location):
+    """
+    Clean the location name for API query
+    
+    Args:
+        location (str): Raw location name input
+        
+    Returns:
+        str: Cleaned location name
+    """
+    # Remove special characters except for spaces
+    location = re.sub(r'[^\w\s]', '', location)
+    # Replace spaces with URL-friendly format
+    location = location.replace(' ', '%20')
+    return location
+
+def search_city(keyword):
+    """
+    Search for cities by keyword
+    
+    Args:
+        keyword (str): Search keyword
+        
+    Returns:
+        list: List of matching city names
+    """
+    try:
+        search_url = f"{WAQI_BASE_URL}/search/?token={WAQI_DEMO_TOKEN}&keyword={keyword}"
+        response = requests.get(search_url)
+        data = response.json()
+        
+        if data['status'] == 'ok' and 'data' in data:
+            # Extract city names from search results
+            cities = []
+            for item in data['data']:
+                if 'station' in item and 'name' in item['station']:
+                    cities.append(item['station']['name'])
+            return cities
+        return []
+    except Exception as e:
+        print(f"Error searching cities: {e}")
+        return []
 
 def calculate_aqi(pollutants):
     """
@@ -164,89 +166,69 @@ def calculate_aqi(pollutants):
 
 def get_historical_aqi(location, days=7):
     """
-    Fetch historical AQI data for a location
+    Fetch historical AQI data for a location from database or API
+    
+    Args:
+        location (str): City name
+        days (int): Number of days of historical data to retrieve
+        
+    Returns:
+        list: List of dictionaries with historical AQI readings
     """
     try:
-        # In a real implementation, you would fetch historical data from an API
-        # For this example, we'll create some simulated historical data
+        # Clean the location name for API query
+        location = clean_location_name(location)
         
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
+        # Get current AQI first to check if the location exists
+        api_url = f"{WAQI_BASE_URL}/feed/{location}/?token={WAQI_DEMO_TOKEN}"
+        response = requests.get(api_url)
+        data = response.json()
         
-        # First, get the location details
-        location_url = f"{OPENAQ_BASE_URL}/locations"
-        location_params = {
-            "limit": 1,
-            "page": 1,
-            "offset": 0,
-            "sort": "desc",
-            "radius": 1000,
-            "name": location,
-            "order_by": "lastUpdated"
-        }
-        
-        location_response = requests.get(location_url, params=location_params)
-        location_data = location_response.json()
-        
-        if not location_data or 'results' not in location_data or not location_data['results']:
+        if data['status'] != 'ok':
             return None
         
-        location_id = location_data['results'][0]['id']
+        # Extract forecast data which contains historical data
+        forecast_data = data['data'].get('forecast', {}).get('daily', {})
         
-        # Now get historical measurements
-        measurements_url = f"{OPENAQ_BASE_URL}/measurements"
-        measurements_params = {
-            "location_id": location_id,
-            "date_from": start_date.isoformat(),
-            "date_to": end_date.isoformat(),
-            "limit": 1000,
-            "page": 1,
-            "offset": 0,
-            "sort": "desc",
-            "parameter": ["pm25", "pm10", "o3", "no2", "so2", "co"]
-        }
-        
-        measurements_response = requests.get(measurements_url, params=measurements_params)
-        measurements_data = measurements_response.json()
-        
-        if not measurements_data or 'results' not in measurements_data:
-            return None
-        
-        # Process the historical data
-        results = measurements_data['results']
-        
-        # Group by date and calculate daily AQI
-        df = pd.DataFrame(results)
-        if df.empty:
-            return None
-        
-        # Convert date string to datetime
-        df['date'] = pd.to_datetime(df['date']['utc'])
-        df['date'] = df['date'].dt.date
-        
-        # Group by date and parameter
-        grouped = df.groupby(['date', 'parameter'])['value'].mean().reset_index()
-        
-        # Pivot to get parameters as columns
-        pivoted = grouped.pivot(index='date', columns='parameter', values='value').reset_index()
-        
-        # Calculate AQI for each day
+        # Process historical data
         historical_aqi = []
-        for _, row in pivoted.iterrows():
-            pollutants = {}
-            for param in row.index:
-                if param != 'date' and not pd.isna(row[param]):
-                    pollutants[param] = row[param]
-            
-            if pollutants:
-                aqi = calculate_aqi(pollutants)
-                historical_aqi.append({
-                    'date': row['date'],
-                    'aqi': aqi,
-                    'pollutants': pollutants
-                })
         
-        return historical_aqi
+        # Get PM2.5 historical data
+        if 'pm25' in forecast_data:
+            pm25_data = forecast_data['pm25']
+            for entry in pm25_data:
+                if 'day' in entry and 'avg' in entry:
+                    day = entry['day']
+                    avg = entry['avg']
+                    
+                    pollutants = {'PM2.5': avg}
+                    
+                    # Find matching PM10 data for the same day if available
+                    if 'pm10' in forecast_data:
+                        for pm10_entry in forecast_data['pm10']:
+                            if pm10_entry.get('day') == day:
+                                pollutants['PM10'] = pm10_entry['avg']
+                                break
+                    
+                    # Find matching O3 data for the same day if available
+                    if 'o3' in forecast_data:
+                        for o3_entry in forecast_data['o3']:
+                            if o3_entry.get('day') == day:
+                                pollutants['O3'] = o3_entry['avg']
+                                break
+                    
+                    # Calculate AQI (in this case, we can use the avg value directly as it's already the AQI)
+                    historical_aqi.append({
+                        'date': day,
+                        'aqi': avg,  # Using PM2.5 average as AQI
+                        'pollutants': pollutants,
+                        'timestamp': datetime.strptime(day, "%Y-%m-%d").isoformat()
+                    })
+        
+        # Sort by date
+        historical_aqi.sort(key=lambda x: x['date'], reverse=True)
+        
+        return historical_aqi[:days]  # Return only the requested number of days
         
     except Exception as e:
         print(f"Error fetching historical AQI: {e}")
