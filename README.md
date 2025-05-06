@@ -172,3 +172,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - World Air Quality Index (WAQI) for providing the API
 - Streamlit for the amazing web framework
 - All contributors who have helped improve this project# ai-based-air-quality-monitoring
+# ai-based-air-quality-monitoring
