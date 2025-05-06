@@ -76,7 +76,7 @@ AirQual is a comprehensive air quality monitoring application that provides real
    Create a `.env` file in the root directory with the following variables:
 
    ```
-   DATABASE_URL=postgresql://username:password@localhost:5432/airqual
+   DATABASE_URL=postgresql://
    WAQI_API_KEY=your_api_key_here
    ```
 
